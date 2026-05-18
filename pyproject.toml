@@ -1,0 +1,46 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "surgical_fl"
+version = "1.0.0"
+description = "Research framework for federated learning of surgical manipulation skills using synthetic trajectories, distributed policy learning, and explainable AI for simulated robotic-assisted procedures."
+license = "Apache-2.0"
+dependencies = [
+    "flwr[simulation]>=1.24.0",
+    "torch==2.8.0",
+    "numpy>=1.26.0",
+    "matplotlib>=3.10.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/surgical_fl"]
+
+[tool.flwr.app]
+publisher = "surgical-fl-research"
+
+[tool.flwr.app.components]
+serverapp = "surgical_fl.federation.server_app:app"
+clientapp = "surgical_fl.federation.client_app:app"
+
+# ─── Configuración del experimento ───────────────────────────────────────────
+[tool.flwr.app.config]
+num-rounds        = 5
+fraction-fit      = 1.0          # fracción de clientes en cada ronda
+fraction-evaluate = 1.0
+num-clients       = 2            # hospitales simulados
+ 
+# Datos sintéticos
+num-samples       = 200          # trayectorias por cliente
+trajectory-length = 50           # puntos por trayectoria
+noise-level       = 0.05         # ruido base (hospital A: menor, B: mayor)
+ 
+# Entrenamiento local
+local-epochs      = 3
+batch-size        = 32
+learning-rate     = 0.001
+ 
+# Skill activa
+skill             = "cutting"    # La skill no define nada, solo una función de evaluación de cómo se ha realizado la tarea
+

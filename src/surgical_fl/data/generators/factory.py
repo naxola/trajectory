@@ -9,14 +9,24 @@ La única responsablidad es: Dadas esas dos entradas, instanciar la clase genera
 
 """
 
-from .trajectories.cutting import LinearCutGenerator, CurvedCutGenerator
+from .trajectories.cutting import LinearCutGenerator, CurvedCutGenerator, SplineCutGenerator
 from .base import SurgicalDataGenerator
 from ...domain.profiles.registry import get_profile, list_profiles
 
 
 def _select_cutting(profile, trajectory_length, seed) -> SurgicalDataGenerator:
+    cut_style = profile.get_skill_param("cutting", "cut_style", None)
     curvature = profile.get_skill_param("cutting", "curvature", profile.curvature_bias)
-    if curvature > 0:
+
+    if cut_style == "spline":
+        n_control_points = profile.get_skill_param("cutting", "n_control_points", 4)
+        return SplineCutGenerator(
+            trajectory_length=trajectory_length,
+            n_control_points=n_control_points,
+            noise_std=profile.noise_std,
+            seed=seed,
+        )
+    if cut_style == "curved" or (cut_style is None and curvature > 0):
         return CurvedCutGenerator(
             trajectory_length=trajectory_length,
             curvature=curvature,

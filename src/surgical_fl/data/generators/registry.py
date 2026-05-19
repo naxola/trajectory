@@ -14,6 +14,7 @@ _REGISTRY: dict[str, list[type[SurgicalDataGenerator]]] = {
     "cutting": [
         LinearCutGenerator,
         CurvedCutGenerator,
+        SplineCutGenerator
     ],
     #A futuro podriamos poner esto:
     # "suturing": [],

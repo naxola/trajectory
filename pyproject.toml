@@ -17,6 +17,9 @@ dependencies = [
 [tool.hatch.build.targets.wheel]
 packages = ["src/surgical_fl"]
 
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+
 [tool.flwr.app]
 publisher = "surgical-fl-research"
 

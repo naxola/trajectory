@@ -27,18 +27,18 @@ class TrajectoryDataset(Dataset):
     def __getitem__(self, idx)->tuple[torch.Tensor, torch.Tensor]:
         return self.inputs[idx], self.outputs[idx]
 
-def build_dataloader(generator: SurgicalDataGenerator, num_samples: int, batch_size: int = 32, shuffle: bool = True) -> DataLoader:
+def build_dataloader(generator: SurgicalDataGenerator, n_samples: int, batch_size: int = 32, shuffle: bool = True) -> DataLoader:
     """
     Genera trayectorias y construye un DataLoader.
     Args:
         generator: Generador de trayectorias
-        num_samples: Número de trayectorias a generar
+        n_samples: Número de trayectorias a generar
         batch_size: Tamaño del batch
         shuffle: Si se debe barajar el dataset
     Returns:
         DataLoader con las trayectorias
     """
-    trajectories = generator.generate(num_samples)
+    trajectories = generator.generate(n_samples)
     dataset = TrajectoryDataset(trajectories)
     return DataLoader(dataset, batch_size=batch_size, shuffle=shuffle)
      

@@ -28,10 +28,10 @@ def get_generator_classes(skill: str) -> list[type[SurgicalDataGenerator]]:
      VAlueError si la skill no tiene generadores retistrados """
     if skill not in _REGISTRY:
         available = list(_REGISTRY.keys())
-        raise ValueError(f"Skill '{skill}' no encontrada en el registro. Skills disponibles: {available}")
+        raise ValueError(f"Skill '{skill}' no tiene generadores registrados. Skills disponibles: {available}")
     return _REGISTRY[skill]
 
-def list_sills_with_generators() -> list[str]:
+def list_skills_with_generators() -> list[str]:
     """ Devuelve la lista de skills que tienen generadores registrados """
     return list(_REGISTRY.keys())
     

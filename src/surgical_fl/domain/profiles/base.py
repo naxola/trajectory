@@ -17,7 +17,7 @@ class HospitalProfile:
     Aqui se pueden ir añadiendo los nuevos campos (coste computacional, politica de privacidad, frecuencia de comunicación... etc)
     """
     name: str #Identificador del hospital
-    nose_std: float #Ruidos o imprecisiones por instrumentación
+    noise_std: float #Ruidos o imprecisiones por instrumentación
     speed_variance: float #Varianza en la velocidad de ejecución de la maniobra
     curvature_bias: float #Sesgo en la curvatura de la trayectoria
     local_epochs_factor: float = 1.0 #Factor multiplicador de epochs locales

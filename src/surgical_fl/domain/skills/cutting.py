@@ -3,11 +3,26 @@
 Habilidad quirúrgica: Cutting (incisión).
 La idea es evaluar la habilidad de cortar un tejido
 """
+from dataclasses import dataclass
 import numpy as np
 from .base import SurgicalSkill
 
 
+@dataclass(frozen=True)
+class CuttingConstraints:
+    min_length: float = 0.5
+    max_curvature: float = 0.3
+
+
 class CuttingSkill(SurgicalSkill):
+
+    @property
+    def constraints(self) -> CuttingConstraints:
+        return CuttingConstraints()
+
+    def is_valid(self, trajectory: np.ndarray) -> bool:
+        """Devuelve True si la trayectoria tiene forma (T, 2) con T >= 2."""
+        return trajectory.ndim == 2 and trajectory.shape[1] == 2 and len(trajectory) >= 2
 
     @property
     def name(self) -> str:

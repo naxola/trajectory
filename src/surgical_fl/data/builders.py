@@ -73,3 +73,4 @@ def build_dataset_from_profiles(
         all_trajs.append(trajs)
 
     combined = np.concatenate(all_trajs, axis=0)
+    return TrajectoryDataset(combined), per_profile

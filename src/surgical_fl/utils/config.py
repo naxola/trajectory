@@ -27,7 +27,10 @@ Estructura del TOML esperado:
     learning_rate = 0.001
     seed = 42
 """
-import tomllib
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 

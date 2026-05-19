@@ -1,0 +1,24 @@
+{
+  "name": "cutting_baseline",
+  "skill": "cutting",
+  "profiles": [
+    "hospital_a",
+    "hospital_b"
+  ],
+  "model": {
+    "name": "mlp",
+    "hidden_dim": 64,
+    "dropout": 0.1
+  },
+  "data": {
+    "num_samples": 400,
+    "trajectory_length": 50,
+    "val_split": 0.2
+  },
+  "training": {
+    "epochs": 20,
+    "batch_size": 32,
+    "learning_rate": 0.001,
+    "seed": 42
+  }
+}

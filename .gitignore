@@ -1,13 +1,10 @@
 .claude
 .pytest_cache
 notebooks
-outputs
-src/__pycache__
-src/surgical_fl/__pycache__
-src/surgical_fl/models/__pycache__
-src/surgical_fl/models/trajectory/__pycache__
+**/__pycache__
+**/*.pyc
+**/*.pyo
 
 src/surgical_fl/explainability
 src/surgical_fl/federation
 src/surgical_fl/simulation
-src/surgical_fl/training

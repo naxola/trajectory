@@ -15,6 +15,7 @@ from ...domain.profiles.registry import get_profile, list_profiles
 
 
 def _select_cutting(profile, trajectory_length, seed) -> SurgicalDataGenerator:
+    """Selecciona el generador de corte adecuado según el perfil"""
     cut_style = profile.get_skill_param("cutting", "cut_style", None)
     curvature = profile.get_skill_param("cutting", "curvature", profile.curvature_bias)
 

@@ -43,4 +43,14 @@ class TestHeterogeneity:
     def test_different_hospitals_different_generator_class(self):
         gen_a = build_generator("cutting", "hospital_a", seed=0)
         gen_b = build_generator("cutting", "hospital_b", seed=0)
-        assert type(gen_a).__name__ != type(gen_b).__name__
+        gen_c = build_generator("cutting", "hospital_c", seed=0)
+        assert type(gen_a).__name__ != type(gen_b).__name__ != type(gen_c).__name__
+
+    def test_hospital_c_more_curved_than_a(self):
+        gen_a = build_generator("cutting", "hospital_a", trajectory_length=50, seed=0)
+        gen_c = build_generator("cutting", "hospital_c", trajectory_length=50, seed=0)
+        data_a = gen_a.generate(100)
+        data_c = gen_c.generate(100)
+        curvature_a = np.mean(np.abs(np.diff(np.diff(data_a[:, :, 1]))))
+        curvature_c = np.mean(np.abs(np.diff(np.diff(data_c[:, :, 1]))))
+        assert curvature_c > curvature_a

@@ -9,6 +9,7 @@ from .cutting import CuttingSkill
 
 _REGISTRY: dict[str, SurgicalSkill] = {
     "cutting": CuttingSkill(),
+    
 }
 
 

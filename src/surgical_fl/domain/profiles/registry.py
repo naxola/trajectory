@@ -9,11 +9,12 @@ API simétrica a skills/registry.py:
   """
 
 from .base import HospitalProfile
-from .hospitals import HOSPITAL_A, HOSPITAL_B
+from .hospitals import HOSPITAL_A, HOSPITAL_B, HOSPITAL_C
 
 _REGISTRY: dict[str, HospitalProfile] = {
     "hospital_a": HOSPITAL_A,
     "hospital_b": HOSPITAL_B,
+    "hospital_c": HOSPITAL_C,
 }
 
 def get_profile(name: str) -> HospitalProfile:

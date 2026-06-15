@@ -1,0 +1,21 @@
+name = "cutting_c"
+skill = "cutting"
+# Un único hospital: Hospital C (spline experto). Útil para ver el aprendizaje
+# del modelo sobre un solo estilo, sin mezclar perfiles.
+profiles = ["hospital_c"]
+
+[model]
+name = "mlp"
+hidden_dim = 80 #Es el numero de neuronas en la capa oculta
+dropout = 0.2 #Es la probabilidad de dropout (numero de neuronas que se apagan aleatoriamente durante el entrenamiento)
+
+[data]
+num_samples = 4000 #Numero total de muestras
+trajectory_length = 100 #Longitud de la trayectoria
+val_split = 0.2 #Porcentaje de datos que se usan para validacion
+
+[training]
+epochs = 30 #Numero de epocas
+batch_size = 64 #Numero de muestras por batch
+learning_rate = 0.0005 #Tasa de aprendizaje
+seed = 10 #Semilla para la generacion de datos pseudoaleatorios

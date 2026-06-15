@@ -27,6 +27,7 @@ Estructura del TOML esperado:
     learning_rate = 0.001
     seed = 42
 """
+import json
 try:
     import tomllib
 except ModuleNotFoundError:
@@ -67,17 +68,29 @@ class ExperimentConfig:
     training: TrainingConfig = field(default_factory=TrainingConfig)
 
     @classmethod
-    def from_toml(cls, path: str | Path) -> "ExperimentConfig":
-        """Carga configuración desde fichero TOML."""
-        path = Path(path)
-        with open(path, "rb") as f:
-            raw = tomllib.load(f)
-
+    def from_dict(cls, raw: dict, name_default: str = "default") -> "ExperimentConfig":
+        """Reconstruye la config desde un dict (p. ej. el config.json de un run)."""
         return cls(
-            name=raw.get("name", path.stem),
+            name=raw.get("name", name_default),
             skill=raw.get("skill", "cutting"),
             profiles=raw.get("profiles", ["hospital_a", "hospital_b"]),
             model=ModelConfig(**raw.get("model", {})),
             data=DataConfig(**raw.get("data", {})),
             training=TrainingConfig(**raw.get("training", {})),
         )
+
+    @classmethod
+    def from_toml(cls, path: str | Path) -> "ExperimentConfig":
+        """Carga configuración desde fichero TOML."""
+        path = Path(path)
+        with open(path, "rb") as f:
+            raw = tomllib.load(f)
+        return cls.from_dict(raw, name_default=path.stem)
+
+    @classmethod
+    def from_json(cls, path: str | Path) -> "ExperimentConfig":
+        """Carga la config exacta guardada por un run (outputs/runs/.../config.json)."""
+        path = Path(path)
+        with open(path) as f:
+            raw = json.load(f)
+        return cls.from_dict(raw, name_default=path.stem)

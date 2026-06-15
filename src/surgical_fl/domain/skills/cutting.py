@@ -12,6 +12,24 @@ from .base import SurgicalSkill
 class CuttingConstraints:
     min_length: float = 0.5
     max_curvature: float = 0.3
+    tolerance: float = 0.1  # desviación (en unidades de la curva) que ya da score 0
+
+
+def _polyline_deviations(trajectory: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """Distancia de cada punto de `trajectory` al polilínea `reference`.
+
+    Mide desviación geométrica (punto-a-segmento), no índice-a-índice, así que
+    funciona aunque la trayectoria y la referencia tengan distinto nº de puntos.
+    """
+    A = reference[:-1]
+    AB = reference[1:] - A
+    ab2 = np.maximum((AB ** 2).sum(axis=1), 1e-12)  # (S,)
+    dists = np.empty(len(trajectory))
+    for i, p in enumerate(trajectory):
+        t = np.clip(((p - A) * AB).sum(axis=1) / ab2, 0.0, 1.0)  # proyección por segmento
+        proj = A + t[:, None] * AB
+        dists[i] = np.sqrt(((p - proj) ** 2).sum(axis=1)).min()
+    return dists
 
 
 class CuttingSkill(SurgicalSkill):
@@ -32,15 +50,23 @@ class CuttingSkill(SurgicalSkill):
         self,
         trajectory: np.ndarray,
         world_state: object | None = None,
+        reference: np.ndarray | None = None,
     ) -> dict[str, float]:
         """
         Métricas para la tarea de corte:
 
-        (world_state=None):
-          - path_error: desviación lateral respecto a la línea ideal
+          - path_error: desviación media respecto a la incisión ideal
           - smoothness: uniformidad de la velocidad
           - length:     longitud total recorrida
           - task_score: puntuación compuesta [0, 1]
+
+        Args:
+            reference: curva ideal (R, 2) contra la que medir la desviación.
+                       Si se pasa, path_error es la distancia geométrica media
+                       al polilínea de referencia (corte real vs corte ideal),
+                       lo que permite comparar cortes de la MISMA forma objetivo
+                       aunque sean curvos. Si es None (compat), se usa la
+                       desviación lateral respecto a la línea recta y=y_start.
         """
         if len(trajectory) < 2:
             return {
@@ -52,8 +78,16 @@ class CuttingSkill(SurgicalSkill):
 
         x, y = trajectory[:, 0], trajectory[:, 1]
 
-        # Error: desviación media respecto a la línea ideal (y = y_start)
-        path_error = float(np.mean(np.abs(y - y[0])))
+        if reference is not None:
+            # Desviación geométrica respecto a la incisión ideal.
+            path_error = float(np.mean(_polyline_deviations(trajectory, reference)))
+            error_penalty = float(
+                np.clip(1.0 - path_error / self.constraints.tolerance, 0, 1)
+            )
+        else:
+            # Compat: desviación lateral respecto a la línea ideal (y = y_start)
+            path_error = float(np.mean(np.abs(y - y[0])))
+            error_penalty = float(np.clip(1.0 - path_error * 5, 0, 1))
 
         # Suavidad: inverso de la varianza de velocidades
         dx, dy = np.diff(x), np.diff(y)
@@ -64,7 +98,6 @@ class CuttingSkill(SurgicalSkill):
         length = float(np.sum(speeds))
 
         # Score compuesto
-        error_penalty = float(np.clip(1.0 - path_error * 5, 0, 1))
         task_score = 0.5 * smoothness + 0.5 * error_penalty
 
         metrics = {

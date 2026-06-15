@@ -1,6 +1,9 @@
 name = "cutting_spline"
 skill = "cutting"
-profiles = ["hospital_c"]
+# Dos hospitales con la MISMA incisión de referencia (spline), distinta pericia:
+#   hospital_c = experto (radio pequeño)   hospital_d = intermedio (radio mayor).
+# Comparten la curva objetivo → comparables por desviación contra la referencia.
+profiles = ["hospital_c", "hospital_d"]
 
 [model]
 name = "mlp"

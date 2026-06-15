@@ -42,6 +42,25 @@ class TestCuttingSkill:
                      for t in gen_b.generate(30)]
         assert np.mean(scores_a) > np.mean(scores_b)
 
+    def test_spline_expert_scores_higher_with_reference(self):
+        """Con la misma incisión de referencia, el spline experto (radio menor)
+        debe desviarse menos y puntuar más que el intermedio."""
+        gen_c = build_generator("cutting", "hospital_c", trajectory_length=80, seed=0)
+        gen_d = build_generator("cutting", "hospital_d", trajectory_length=80, seed=0)
+        ref = gen_c.reference_curve  # compartida entre c y d
+        scores_c = [self.skill.evaluate_trajectory(t, reference=ref)["task_score"]
+                    for t in gen_c.generate(30)]
+        scores_d = [self.skill.evaluate_trajectory(t, reference=ref)["task_score"]
+                    for t in gen_d.generate(30)]
+        assert np.mean(scores_c) > np.mean(scores_d)
+
+    def test_reference_deviation_in_unit_range(self):
+        gen = build_generator("cutting", "hospital_c", trajectory_length=80, seed=0)
+        ref = gen.reference_curve
+        for traj in gen.generate(20):
+            score = self.skill.evaluate_trajectory(traj, reference=ref)["task_score"]
+            assert 0.0 <= score <= 1.0
+
     def test_degenerate_trajectory(self):
         """Trayectoria de un solo punto debe devolver score 0."""
         traj = np.array([[0.5, 0.0]])

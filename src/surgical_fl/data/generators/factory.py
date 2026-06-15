@@ -20,10 +20,14 @@ def _select_cutting(profile, trajectory_length, seed) -> SurgicalDataGenerator:
     curvature = profile.get_skill_param("cutting", "curvature", profile.curvature_bias)
 
     if cut_style == "spline":
-        n_control_points = profile.get_skill_param("cutting", "n_control_points", 4)
+        # radius = precisión de la mano del cirujano (skill); n_nodes puede ser
+        # mayor que el nº de nodos de la curva de referencia.
+        radius = profile.get_skill_param("cutting", "radius", 0.05)
+        n_nodes = profile.get_skill_param("cutting", "n_nodes", None)
         return SplineCutGenerator(
             trajectory_length=trajectory_length,
-            n_control_points=n_control_points,
+            n_nodes=n_nodes,
+            radius=radius,
             noise_std=profile.noise_std,
             seed=seed,
         )

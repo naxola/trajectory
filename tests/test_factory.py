@@ -47,10 +47,16 @@ class TestHeterogeneity:
         assert type(gen_a).__name__ != type(gen_b).__name__ != type(gen_c).__name__
 
     def test_hospital_c_more_curved_than_a(self):
+        """Hospital C (spline en S) se aparta más de la recta que Hospital A.
+
+        Se promedia sobre muchas muestras para cancelar el ruido y medir la
+        FORMA de la incisión, no el jitter (un trazo recto ruidoso puede tener
+        más segundas diferencias que una curva suave).
+        """
         gen_a = build_generator("cutting", "hospital_a", trajectory_length=50, seed=0)
         gen_c = build_generator("cutting", "hospital_c", trajectory_length=50, seed=0)
-        data_a = gen_a.generate(100)
-        data_c = gen_c.generate(100)
-        curvature_a = np.mean(np.abs(np.diff(np.diff(data_a[:, :, 1]))))
-        curvature_c = np.mean(np.abs(np.diff(np.diff(data_c[:, :, 1]))))
-        assert curvature_c > curvature_a
+        mean_y_a = gen_a.generate(200)[:, :, 1].mean(axis=0)
+        mean_y_c = gen_c.generate(200)[:, :, 1].mean(axis=0)
+        amplitude_a = mean_y_a.max() - mean_y_a.min()
+        amplitude_c = mean_y_c.max() - mean_y_c.min()
+        assert amplitude_c > amplitude_a

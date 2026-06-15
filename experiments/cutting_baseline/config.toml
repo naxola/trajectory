@@ -8,7 +8,7 @@ hidden_dim = 64 #Es el numero de neuronas en la capa oculta
 dropout = 0.1 #Es la probabilidad de dropout (numero de neuronas que se apagan aleatoriamente durante el entrenamiento)
 
 [data]
-num_samples = 400 #Numero total de muestras
+num_samples = 1500 #Numero total de muestras
 trajectory_length = 50 #Longitud de la trayectoria
 val_split = 0.2 #Porcentaje de datos que se usan para validacion
 

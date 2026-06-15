@@ -17,14 +17,14 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, random_split
+from torch.utils.data import DataLoader
 
 from surgical_fl.utils.config import ExperimentConfig
 from surgical_fl.utils.seeding import set_global_seed
 from surgical_fl.utils.run_io import RunDirectory
 
 from surgical_fl.domain.skills.registry import get_skill
-from surgical_fl.data.builders import build_dataset_from_profiles
+from surgical_fl.data.builders import build_centralized_split
 from surgical_fl.models.registry import get_model
 from surgical_fl.training.trainer import train_one_epoch, evaluate
 
@@ -75,34 +75,42 @@ def main():
     # Persistir la config exacta usada (incluye sobrescrituras CLI)
     run.save_config(cfg)
 
-    # ── Dataset desde múltiples perfiles ──────────────────────────────────────
+    # ── Dataset: train mezclado + val SEPARADO por perfil ─────────────────────
+    # Cada perfil usa una semilla derivada distinta (datos independientes) y se
+    # parte en train/val por separado, para poder medir la generalización del
+    # modelo conjunto hospital a hospital.
     skill = get_skill(cfg.skill)
-    full_dataset, per_profile = build_dataset_from_profiles(
+    split = build_centralized_split(
         skill=cfg.skill,
         profile_names=cfg.profiles,
         total_samples=cfg.data.num_samples,
+        val_split=cfg.data.val_split,
         trajectory_length=cfg.data.trajectory_length,
         seed=cfg.training.seed,
     )
 
-    for profile_name, trajs in per_profile.items():
-        scores = [skill.evaluate_trajectory(t)["task_score"] for t in trajs[:15]]
+    # Calidad de cada perfil: desviación respecto a SU curva de referencia ideal.
+    for profile_name, trajs in split.train_per_profile.items():
+        ref = split.references[profile_name]
+        scores = [
+            skill.evaluate_trajectory(t, reference=ref)["task_score"]
+            for t in trajs[:15]
+        ]
         print(
             f"  {profile_name}: calidad {np.mean(scores):.3f} ± {np.std(scores):.3f}"
         )
 
-    # ── Split train / val ─────────────────────────────────────────────────────
-    val_size   = int(len(full_dataset) * cfg.data.val_split)
-    train_size = len(full_dataset) - val_size
-    train_ds, val_ds = random_split(
-        full_dataset,
-        [train_size, val_size],
-        generator=torch.Generator().manual_seed(cfg.training.seed),
+    print(
+        f"\nDataset total: train={len(split.train)}, "
+        f"val={len(split.val_combined)} ({len(cfg.profiles)} perfiles)\n"
     )
-    print(f"\nDataset total: {len(full_dataset)} → train={train_size}, val={val_size}\n")
 
-    train_loader = DataLoader(train_ds, batch_size=cfg.training.batch_size, shuffle=True)
-    val_loader   = DataLoader(val_ds,   batch_size=cfg.training.batch_size, shuffle=False)
+    train_loader = DataLoader(split.train, batch_size=cfg.training.batch_size, shuffle=True)
+    val_loader   = DataLoader(split.val_combined, batch_size=cfg.training.batch_size, shuffle=False)
+    val_loaders_per_profile = {
+        name: DataLoader(ds, batch_size=cfg.training.batch_size, shuffle=False)
+        for name, ds in split.val_per_profile.items()
+    }
 
     # ── Modelo ────────────────────────────────────────────────────────────────
     model = get_model(
@@ -139,18 +147,28 @@ def main():
     model.load_state_dict(torch.load(run.checkpoints / "best.pt"))
     final_val_loss, final_metrics = evaluate(model, val_loader, device)
 
+    # Generalización hospital a hospital: ¿predice igual de bien cada estilo?
+    val_per_profile = {}
+    for name, loader in val_loaders_per_profile.items():
+        loss, metrics = evaluate(model, loader, device)
+        val_per_profile[name] = {"mse": loss, "rmse": metrics["rmse"]}
+
     print(f"\n{'─'*50}")
-    print(f"Mejor val loss:  {final_val_loss:.5f}")
-    print(f"RMSE val final:  {final_metrics['rmse']:.5f}")
+    print(f"Mejor val loss (global):  {final_val_loss:.5f}")
+    print(f"RMSE val final (global):  {final_metrics['rmse']:.5f}")
+    print("Val por hospital:")
+    for name, m in val_per_profile.items():
+        print(f"  {name}: mse={m['mse']:.5f}  rmse={m['rmse']:.5f}")
     print(f"{'─'*50}\n")
 
     # ── Persistir resultados ──────────────────────────────────────────────────
     run.save_metrics({
-        "train_losses":   train_losses,
-        "val_losses":     val_losses,
-        "best_val_loss":  best_val_loss,
-        "final_val_rmse": final_metrics["rmse"],
-        "n_params":       n_params,
+        "train_losses":        train_losses,
+        "val_losses":          val_losses,
+        "best_val_loss":       best_val_loss,
+        "final_val_rmse":      final_metrics["rmse"],
+        "val_per_profile":     val_per_profile,
+        "n_params":            n_params,
     })
 
     plot_learning_curve(
@@ -165,7 +183,8 @@ def main():
         output_path=run.figure_path("predictions.png"),
         trajectory_length=cfg.data.trajectory_length,
         device=device,
-        title=f"{cfg.name} — Real vs Predicha",
+        references=split.references,
+        title=f"{cfg.name} — Real vs Rollout",
     )
 
     print(f"✓ Resultados completos en: {run.root}")

@@ -1,5 +1,6 @@
 """Tests para data/generators/trajectories/cutting.py"""
 import numpy as np
+import pytest
 from surgical_fl.data.generators.trajectories.cutting import (
     LinearCutGenerator,
     CurvedCutGenerator,
@@ -78,29 +79,77 @@ class TestSplineCutGenerator:
         single = gen.generate_one()
         assert single.shape == (40, 2)
 
-    def test_x_is_uniform_linspace(self):
-        """X debe ser un linspace uniforme de 0 a 1."""
+    def test_endpoints_on_reference_without_perturbation(self):
+        """Con radio 0 y ruido 0, el corte coincide con los extremos de la
+        incisión de referencia por defecto: (0,0) y (1,0)."""
+        gen = SplineCutGenerator(trajectory_length=50, radius=0.0, noise_std=0.0, seed=0)
+        traj = gen.generate_one()
+        np.testing.assert_allclose(traj[0], [0.0, 0.0], atol=1e-6)
+        np.testing.assert_allclose(traj[-1], [1.0, 0.0], atol=1e-6)
+
+    def test_larger_radius_more_deviation(self):
+        """Un radio mayor (mano menos precisa) produce más desviación en Y."""
+        gen_small = SplineCutGenerator(trajectory_length=80, radius=0.02, noise_std=0.0, seed=0)
+        gen_big = SplineCutGenerator(trajectory_length=80, radius=0.10, noise_std=0.0, seed=0)
+        var_small = np.var(gen_small.generate(50)[:, :, 1])
+        var_big = np.var(gen_big.generate(50)[:, :, 1])
+        assert var_big > var_small
+
+    def test_more_nodes_than_reference_allowed(self):
+        """El corte simulado puede tener más nodos que la curva de referencia."""
+        gen = SplineCutGenerator(trajectory_length=60, n_nodes=8, seed=0)
+        assert gen.n_nodes > len(gen.reference_nodes)
+        assert gen.generate(3).shape == (3, 60, 2)
+
+    def test_reference_curve_shape_and_endpoints(self):
+        """reference_curve es una curva densa de (0,0) a (1,0)."""
         gen = SplineCutGenerator(trajectory_length=50, seed=0)
-        traj = gen.generate_one()
-        expected_x = np.linspace(0, 1, 50)
-        np.testing.assert_allclose(traj[:, 0], expected_x, atol=1e-6)
+        ref = gen.reference_curve
+        assert ref.ndim == 2 and ref.shape[1] == 2
+        np.testing.assert_allclose(ref[0], [0.0, 0.0], atol=1e-6)
+        np.testing.assert_allclose(ref[-1], [1.0, 0.0], atol=1e-6)
 
-    def test_endpoints_zero_without_noise(self):
-        """Con ruido cero, Y en los extremos debe ser exactamente 0 (puntos de control fijados a 0)."""
-        gen = SplineCutGenerator(trajectory_length=50, noise_std=0.0, seed=0)
-        traj = gen.generate_one()
-        assert abs(traj[0, 1]) < 1e-6
-        assert abs(traj[-1, 1]) < 1e-6
+    def test_shared_reference_across_instances(self):
+        """Dos hospitales spline con distinto radio comparten la misma
+        referencia → son comparables."""
+        gen_expert = SplineCutGenerator(radius=0.03, seed=1)
+        gen_novice = SplineCutGenerator(radius=0.08, seed=2)
+        np.testing.assert_array_equal(
+            gen_expert.reference_curve, gen_novice.reference_curve
+        )
 
-    def test_more_control_points_more_variation(self):
-        """Más puntos de control permiten mayor variación en Y (con ruido cero)."""
-        gen_few = SplineCutGenerator(trajectory_length=100, n_control_points=2, noise_std=0.0, seed=0)
-        gen_many = SplineCutGenerator(trajectory_length=100, n_control_points=10, noise_std=0.0, seed=0)
-        data_few = gen_few.generate(50)
-        data_many = gen_many.generate(50)
-        var_few = np.var(data_few[:, :, 1])
-        var_many = np.var(data_many[:, :, 1])
-        assert var_many > var_few
+
+class TestGeneratorMetadata:
+    """Regresión: metadata/validate_output construyen SurgicalGeneratorMetadata.
+
+    Antes fallaban con TypeError por un typo (output_shpae) en el dataclass.
+    """
+
+    def test_metadata_has_expected_output_shape(self):
+        gen = LinearCutGenerator(trajectory_length=40, seed=0)
+        meta = gen.metadata
+        assert meta.skill == "cutting"
+        assert meta.output_type == "trajectory"
+        assert meta.output_shape == (40, 2)
+        assert meta.units == "meters"
+
+    def test_metadata_accessible_for_all_cutting_generators(self):
+        for gen in (
+            LinearCutGenerator(trajectory_length=30, seed=0),
+            CurvedCutGenerator(trajectory_length=30, seed=0),
+            SplineCutGenerator(trajectory_length=30, seed=0),
+        ):
+            assert gen.metadata.output_shape == (30, 2)
+
+    def test_validate_output_accepts_correct_shape(self):
+        gen = LinearCutGenerator(trajectory_length=50, seed=0)
+        assert gen.validate_output(gen.generate(5)) is True
+
+    def test_validate_output_rejects_wrong_shape(self):
+        gen = LinearCutGenerator(trajectory_length=50, seed=0)
+        bad = np.zeros((5, 50, 3), dtype=np.float32)  # 3D en vez de 2D
+        with pytest.raises(ValueError, match="Shape inesperado"):
+            gen.validate_output(bad)
 
 
 class TestReproducibility:

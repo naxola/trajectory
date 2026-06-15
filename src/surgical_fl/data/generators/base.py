@@ -18,7 +18,7 @@ class SurgicalGeneratorMetadata:
     """
     skill: str #Puede ser "cutting", "suturing", "dissection", etc.
     output_type: str #trayetory, force tissue_state. multimodal... 
-    output_shpae: tuple # shape de un solo sample por ejemplo (T,2) en trayectorias 2d (que es en lo que estamos ahora)
+    output_shape: tuple # shape de un solo sample por ejemplo (T,2) en trayectorias 2d (que es en lo que estamos ahora)
     units: str #unidades de los datos (metros, newtons, ....)
     description: str =""
     version: str = "0.0.1"

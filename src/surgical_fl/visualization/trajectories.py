@@ -36,6 +36,28 @@ def plot_learning_curve(
     return output_path
 
 
+def _autoregressive_rollout(
+    model: torch.nn.Module,
+    start_point: np.ndarray,
+    steps: int,
+    device: torch.device,
+) -> np.ndarray:
+    """Despliega el modelo realimentando su propia predicción.
+
+    Parte del primer punto real y predice toda la trayectoria sin volver a ver
+    datos reales: p_{t+1} = model(p_t). Es la prueba HONESTA de si el modelo
+    capturó la trayectoria — a diferencia del teacher forcing (predecir un paso
+    desde cada punto real), que se ve engañosamente bien.
+    """
+    cur = torch.tensor(start_point, dtype=torch.float32).view(1, 1, -1).to(device)
+    points = [np.asarray(start_point, dtype=np.float32)]
+    with torch.no_grad():
+        for _ in range(steps - 1):
+            cur = model(cur)
+            points.append(cur.squeeze().cpu().numpy())
+    return np.stack(points, axis=0)
+
+
 def plot_predictions_per_profile(
     model: torch.nn.Module,
     skill: str,
@@ -43,10 +65,11 @@ def plot_predictions_per_profile(
     output_path: str,
     trajectory_length: int = 50,
     device: torch.device | None = None,
+    references: dict[str, np.ndarray] | None = None,
     title: str | None = None,
 ) -> str:
     """
-    Una trayectoria real vs predicha por cada perfil registrado.
+    Trayectoria real vs ROLLOUT autorregresivo del modelo, por cada perfil.
 
     Args:
         model:             modelo ya entrenado
@@ -55,6 +78,7 @@ def plot_predictions_per_profile(
         output_path:       ruta del PNG resultante
         trajectory_length: longitud de cada trayectoria a visualizar
         device:            torch.device (default: cpu)
+        references:        curva ideal por perfil para superponerla (opcional)
         title:             título del gráfico (opcional)
     """
     device = device or torch.device("cpu")
@@ -73,16 +97,18 @@ def plot_predictions_per_profile(
             trajectory_length=trajectory_length,
             seed=0,
         )
-        traj   = gen.generate_one()
-        inputs = torch.tensor(traj[:-1], dtype=torch.float32).unsqueeze(0).to(device)
+        traj = gen.generate_one()
+        rollout = _autoregressive_rollout(model, traj[0], len(traj), device)
 
-        with torch.no_grad():
-            predicted = model(inputs).squeeze(0).cpu().numpy()
+        if references and profile_name in references:
+            ref = references[profile_name]
+            ax.plot(ref[:, 0], ref[:, 1], "-", color="black",
+                    alpha=0.25, linewidth=3, label="Referencia ideal")
 
         ax.plot(traj[:, 0], traj[:, 1], "o-", color=color,
                 alpha=0.6, markersize=3, label="Real", linewidth=1.5)
-        ax.plot(predicted[:, 0], predicted[:, 1], "s--", color="gray",
-                alpha=0.8, markersize=3, label="Predicha", linewidth=1.5)
+        ax.plot(rollout[:, 0], rollout[:, 1], "s--", color="gray",
+                alpha=0.85, markersize=3, label="Rollout", linewidth=1.5)
         ax.set_title(profile_name.replace("_", " ").title())
         ax.set_xlabel("X")
         ax.set_ylabel("Y")

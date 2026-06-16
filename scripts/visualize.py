@@ -27,9 +27,11 @@ import torch
 from surgical_fl.utils.config import ExperimentConfig
 from surgical_fl.models.registry import get_model
 from surgical_fl.data.generators.factory import build_generator
+from surgical_fl.data.builders import build_centralized_split
 from surgical_fl.visualization.trajectories import (
     plot_learning_curve,
     plot_predictions_per_profile,
+    plot_training_dataset,
 )
 
 
@@ -132,6 +134,25 @@ def main():
         title=f"{cfg.name} — Real vs Rollout",
     )
     print(f"✓ {out}")
+
+    # ── Dataset de entrenamiento vs curva ideal (regenerado, determinista) ───
+    # Se reconstruye con la misma semilla/config, así coincide con el del run.
+    split = build_centralized_split(
+        skill=cfg.skill,
+        profile_names=cfg.profiles,
+        total_samples=cfg.data.num_samples,
+        val_split=cfg.data.val_split,
+        trajectory_length=cfg.data.trajectory_length,
+        seed=cfg.training.seed,
+    )
+    for profile in cfg.profiles:
+        out = plot_training_dataset(
+            trajectories=split.train_per_profile[profile],
+            reference=split.references[profile],
+            output_path=str(figures / f"dataset_{profile}{suffix}.png"),
+            title=f"{cfg.name} — {profile}: dataset vs curva ideal",
+        )
+        print(f"✓ {out}")
 
 
 if __name__ == "__main__":

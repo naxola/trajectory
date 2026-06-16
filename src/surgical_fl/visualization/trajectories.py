@@ -122,3 +122,97 @@ def plot_predictions_per_profile(
     plt.savefig(output_path, dpi=150, bbox_inches="tight")
     plt.close(fig)
     return output_path
+
+
+def _vertical_deviations(trajectories: np.ndarray, reference: np.ndarray) -> np.ndarray:
+    """Desviación media (vertical) de cada trayectoria respecto a la curva ideal.
+
+    Como las incisiones son funciones de x, se compara y(traj) con y(referencia)
+    interpolada en las mismas x. Es rápido y coherente con la banda vertical que
+    se rellena en el plot.
+    """
+    rx, ry = reference[:, 0], reference[:, 1]
+    return np.array([
+        float(np.mean(np.abs(t[:, 1] - np.interp(t[:, 0], rx, ry))))
+        for t in trajectories
+    ])
+
+
+def plot_training_dataset(
+    trajectories: np.ndarray,
+    reference: np.ndarray,
+    output_path: str,
+    title: str | None = None,
+    max_background: int = 200,
+) -> str:
+    """
+    Visualiza un dataset de cortes (spline, curvo o recto) frente a su ideal.
+
+    - Nube de fondo: el resto del dataset (submuestreado a max_background) en gris.
+    - Las DOS curvas con mayor desviación respecto a la curva ideal, resaltadas.
+    - El área entre esas dos curvas extremas, rellena de azul semitransparente.
+    - La curva ideal (referencia) ploteada por encima de todo.
+
+    Args:
+        trajectories: (N, T, 2) trayectorias del dataset.
+        reference:    (R, 2) curva ideal contra la que se mide la desviación.
+        output_path:  ruta del PNG resultante.
+        title:        título del gráfico (opcional).
+        max_background: nº máximo de trayectorias dibujadas como nube de fondo.
+    """
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    trajectories = np.asarray(trajectories)
+
+    # Desviación de cada corte respecto a la incisión ideal → los dos extremos.
+    deviations = _vertical_deviations(trajectories, reference)
+    order = np.argsort(deviations)
+    hi, second = int(order[-1]), int(order[-2])  # las dos más desviadas
+
+    fig, ax = plt.subplots(figsize=(9, 5))
+
+    # ── Nube de fondo (resto del dataset) ─────────────────────────────────────
+    n = len(trajectories)
+    if n > max_background:
+        bg_idx = np.linspace(0, n - 1, max_background).astype(int)
+    else:
+        bg_idx = np.arange(n)
+    for i in bg_idx:
+        if i in (hi, second):
+            continue
+        t = trajectories[i]
+        ax.plot(t[:, 0], t[:, 1], color="#94A3B8", alpha=0.15, linewidth=0.7)
+
+    # ── Banda azul entre las dos curvas extremas ─────────────────────────────
+    xg = np.linspace(0.0, 1.0, 200)
+
+    def _y_on_grid(curve: np.ndarray) -> np.ndarray:
+        o = np.argsort(curve[:, 0])  # np.interp exige x creciente
+        return np.interp(xg, curve[:, 0][o], curve[:, 1][o])
+
+    y_hi = _y_on_grid(trajectories[hi])
+    y_second = _y_on_grid(trajectories[second])
+    ax.fill_between(
+        xg, y_hi, y_second, color="#2563EB", alpha=0.25,
+        label="Área entre extremos",
+    )
+
+    # ── Curvas extremas resaltadas ───────────────────────────────────────────
+    for idx, lab in ((hi, "Extrema 1"), (second, "Extrema 2")):
+        c = trajectories[idx]
+        ax.plot(c[:, 0], c[:, 1], color="#1D4ED8", linewidth=1.8,
+                label=f"{lab} (desv={deviations[idx]:.3f})")
+
+    # ── Curva ideal por encima de todo ───────────────────────────────────────
+    ax.plot(reference[:, 0], reference[:, 1], color="black", linewidth=3,
+            label="Curva ideal")
+
+    ax.set_title(title or "Dataset de entrenamiento")
+    ax.set_xlabel("X")
+    ax.set_ylabel("Y")
+    ax.legend(fontsize=8, loc="best")
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect("equal")
+    plt.tight_layout()
+    plt.savefig(output_path, dpi=150, bbox_inches="tight")
+    plt.close(fig)
+    return output_path

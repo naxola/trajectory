@@ -31,6 +31,7 @@ from surgical_fl.training.trainer import train_one_epoch, evaluate
 from surgical_fl.visualization.trajectories import (
     plot_learning_curve,
     plot_predictions_per_profile,
+    plot_training_dataset,
 )
 
 
@@ -186,6 +187,15 @@ def main():
         references=split.references,
         title=f"{cfg.name} — Real vs Rollout",
     )
+    # Dataset de entrenamiento por hospital: nube de cortes, banda azul entre los
+    # dos más desviados y la incisión ideal por encima.
+    for profile_name in cfg.profiles:
+        plot_training_dataset(
+            trajectories=split.train_per_profile[profile_name],
+            reference=split.references[profile_name],
+            output_path=run.figure_path(f"dataset_{profile_name}.png"),
+            title=f"{cfg.name} — {profile_name}: dataset vs curva ideal",
+        )
 
     print(f"✓ Resultados completos en: {run.root}")
     print(f"  └ config.json, metrics.json, checkpoints/, figures/\n")

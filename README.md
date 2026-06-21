@@ -27,7 +27,7 @@ El objetivo es estudiar si varios hospitales pueden entrenar conjuntamente un mo
 Cortes de **distinto estilo no son comparables** (una métrica de desviación contra una recta penaliza por diseño a los cortes curvos). Por eso la comparación se hace entre cortes del **mismo tipo** que comparten una **curva de referencia** (la incisión ideal):
 
 1. Existe una **curva de referencia** común, definida por unos nodos de control e interpolada con Catmull-Rom (`DEFAULT_REFERENCE_NODES` en `data/generators/trajectories/cutting.py`).
-2. Un **corte real** se genera tomando `n_nodes` anclas sobre esa referencia y desplazando cada una dentro de un **disco de radio `r`** (la "mano" del cirujano). Un hospital experto tiene `r` pequeño. El corte puede tener **más nodos** que la referencia.
+2. Un **corte real** se genera perturbando cada **nodo de control** dentro de un **disco de radio `r`** (la "mano" del cirujano) y reconstruyendo el spline con Catmull-Rom sobre los nodos perturbados. Un hospital experto tiene `r` pequeño. El corte puede tener **más nodos** que la referencia (interpolados linealmente por longitud de arco sobre los nodos de referencia).
 3. La **calidad** no compara nodos: mide la **desviación geométrica de la curva generada respecto a la referencia** (`CuttingSkill.evaluate_trajectory(..., reference=...)`).
 
 Dos hospitales que comparten la misma referencia y difieren solo en `r` son directamente comparables: lo que cambia es la pericia, no la forma objetivo.
@@ -79,7 +79,8 @@ src/surgical_fl/
 
 scripts/
 ├── train_centralized.py     # entrena un experimento y genera todas las figuras
-└── visualize.py             # regenera las figuras de un run SIN reentrenar
+├── visualize.py             # regenera las figuras de un run SIN reentrenar
+└── visualize_dataset.py     # inspecciona un generador en crudo (sin entrenar)
 
 experiments/                 # un TOML por experimento (versionable)
 ├── cutting_baseline/        # A + B (estilos distintos)
@@ -148,6 +149,55 @@ python3 scripts/visualize.py --run <ruta> --out-suffix _v2       # no sobrescrib
 ```
 
 Reconstruye el modelo desde `config.json`, carga el checkpoint y regenera todas las figuras (el dataset se regenera de forma determinista con la misma semilla).
+
+### Visualizar un dataset en crudo (sin entrenar)
+
+`scripts/visualize_dataset.py` genera figuras directamente desde el generador, sin necesitar ningún run ni modelo entrenado. Útil para ajustar la geometría antes de lanzar un experimento.
+
+```bash
+# SplineCutGenerator — configuración básica
+python3 scripts/visualize_dataset.py --generator spline
+
+# Spline con 6 nodos de control y radio mayor
+python3 scripts/visualize_dataset.py --generator spline --n-nodes 6 --radius 0.08 --num-samples 300
+
+# Spline con nodos de referencia personalizados (JSON)
+python3 scripts/visualize_dataset.py --generator spline \
+  --ref-nodes "[[0,0],[0.2,0.05],[0.4,0.1],[0.6,-0.05],[0.8,-0.1],[1,0]]"
+
+# Corte lineal
+python3 scripts/visualize_dataset.py --generator linear --noise-std 0.05
+
+# Corte parabólico
+python3 scripts/visualize_dataset.py --generator curved --curvature 0.2 --noise-std 0.03
+
+# Directorio de salida personalizado
+python3 scripts/visualize_dataset.py --generator spline --out-dir outputs/mi_prueba
+```
+
+Por cada ejecución se generan hasta **tres figuras** en `--out-dir` (por defecto `outputs/datasets/`):
+
+| Figura | Descripción |
+|---|---|
+| `<gen>_dataset.png` | Nube de trayectorias simuladas, banda azul entre los dos cortes más desviados y curva de referencia ideal |
+| `<gen>_nodes.png` | *(solo spline)* Nodos de referencia, discos de radio `r`, y un corte perturbado de ejemplo con los nodos perturbados |
+| `<gen>_reference.png` | Curva de referencia ideal aislada (con nodos marcados en spline) |
+
+#### Parámetros por generador
+
+| Parámetro | Generadores | Descripción | Defecto |
+|---|---|---|---|
+| `--num-samples` | todos | Nº de trayectorias a generar | `200` |
+| `--trajectory-length` | todos | Puntos por trayectoria | `50` |
+| `--seed` | todos | Semilla aleatoria | `0` |
+| `--max-background` | todos | Máx. trayectorias dibujadas en el fondo | `200` |
+| `--out-dir` | todos | Directorio de salida | `outputs/datasets` |
+| `--noise-std` | linear, curved, spline | Ruido gaussiano añadido al final | `0.02` / `0.0` |
+| `--speed-variance` | linear, curved | Varianza en la velocidad | `0.01` |
+| `--curvature` | curved | Amplitud de la parábola | `0.1` |
+| `--radius` | spline | Radio del disco de perturbación por nodo | `0.05` |
+| `--n-nodes` | spline | Nº de nodos de control del corte (≥ nodos de ref.) | igual que ref. |
+| `--ref-nodes` | spline | Nodos de referencia como JSON `"[[x,y],…]"` | curva en S de 4 nodos |
 
 ### Ajustar la geometría del corte spline
 

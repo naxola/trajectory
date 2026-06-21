@@ -150,7 +150,6 @@ def plot_training_dataset(
 
     - Nube de fondo: el resto del dataset (submuestreado a max_background) en gris.
     - Las DOS curvas con mayor desviación respecto a la curva ideal, resaltadas.
-    - El área entre esas dos curvas extremas, rellena de azul semitransparente.
     - La curva ideal (referencia) ploteada por encima de todo.
 
     Args:
@@ -182,28 +181,14 @@ def plot_training_dataset(
         t = trajectories[i]
         ax.plot(t[:, 0], t[:, 1], color="#94A3B8", alpha=0.15, linewidth=0.7)
 
-    # ── Banda azul entre las dos curvas extremas ─────────────────────────────
-    xg = np.linspace(0.0, 1.0, 200)
-
-    def _y_on_grid(curve: np.ndarray) -> np.ndarray:
-        o = np.argsort(curve[:, 0])  # np.interp exige x creciente
-        return np.interp(xg, curve[:, 0][o], curve[:, 1][o])
-
-    y_hi = _y_on_grid(trajectories[hi])
-    y_second = _y_on_grid(trajectories[second])
-    ax.fill_between(
-        xg, y_hi, y_second, color="#2563EB", alpha=0.25,
-        label="Área entre extremos",
-    )
-
     # ── Curvas extremas resaltadas ───────────────────────────────────────────
     for idx, lab in ((hi, "Extrema 1"), (second, "Extrema 2")):
         c = trajectories[idx]
-        ax.plot(c[:, 0], c[:, 1], color="#1D4ED8", linewidth=1.8,
+        ax.plot(c[:, 0], c[:, 1], color="#1D4ED8", linewidth=0.9,
                 label=f"{lab} (desv={deviations[idx]:.3f})")
 
     # ── Curva ideal por encima de todo ───────────────────────────────────────
-    ax.plot(reference[:, 0], reference[:, 1], color="black", linewidth=3,
+    ax.plot(reference[:, 0], reference[:, 1], color="#16A34A", linewidth=1.5,
             label="Curva ideal")
 
     ax.set_title(title or "Dataset de entrenamiento")

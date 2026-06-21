@@ -27,7 +27,7 @@ El objetivo es estudiar si varios hospitales pueden entrenar conjuntamente un mo
 Cortes de **distinto estilo no son comparables** (una métrica de desviación contra una recta penaliza por diseño a los cortes curvos). Por eso la comparación se hace entre cortes del **mismo tipo** que comparten una **curva de referencia** (la incisión ideal):
 
 1. Existe una **curva de referencia** común, definida por unos nodos de control e interpolada con Catmull-Rom (`DEFAULT_REFERENCE_NODES` en `data/generators/trajectories/cutting.py`).
-2. Un **corte real** se genera perturbando cada **nodo de control** dentro de un **disco de radio `r`** (la "mano" del cirujano) y reconstruyendo el spline con Catmull-Rom sobre los nodos perturbados. Un hospital experto tiene `r` pequeño. El corte puede tener **más nodos** que la referencia (interpolados linealmente por longitud de arco sobre los nodos de referencia).
+2. Un **corte real** se genera perturbando cada **nodo de control** dentro de un **disco de radio `r`** (la "mano" del cirujano) y reconstruyendo el spline con Catmull-Rom sobre los nodos perturbados. Un hospital experto tiene `r` pequeño. El corte puede tener **más nodos** que la referencia (interpolados linealmente por longitud de arco sobre los nodos de referencia). El **jitter de instrumentación** (`noise_std`) también se inyecta en los nodos de control, *antes* de interpolar: así la trayectoria es siempre una spline **suave** y **monótona en X**, sin picos ni retrocesos, para cualquier nivel de ruido.
 3. La **calidad** no compara nodos: mide la **desviación geométrica de la curva generada respecto a la referencia** (`CuttingSkill.evaluate_trajectory(..., reference=...)`).
 
 Dos hospitales que comparten la misma referencia y difieren solo en `r` son directamente comparables: lo que cambia es la pericia, no la forma objetivo.
@@ -138,7 +138,7 @@ Cada ejecución crea `outputs/runs/<experimento>_<timestamp>/` con la config exa
 |---|---|
 | `learning_curve.png` | loss de entrenamiento por epoch |
 | `predictions.png` | trayectoria real vs **rollout autorregresivo** del modelo + curva ideal |
-| `dataset_<hospital>.png` | nube del dataset, **banda azul** entre los dos cortes más desviados y la **curva ideal** encima |
+| `dataset_<hospital>.png` | nube del dataset, los **dos cortes más desviados** resaltados y la **curva ideal** (verde) encima |
 
 ### Re-visualizar un run sin reentrenar
 
@@ -179,7 +179,7 @@ Por cada ejecución se generan hasta **tres figuras** en `--out-dir` (por defect
 
 | Figura | Descripción |
 |---|---|
-| `<gen>_dataset.png` | Nube de trayectorias simuladas, banda azul entre los dos cortes más desviados y curva de referencia ideal |
+| `<gen>_dataset.png` | Nube de trayectorias simuladas, los dos cortes más desviados resaltados y curva de referencia ideal (verde) |
 | `<gen>_nodes.png` | *(solo spline)* Nodos de referencia, discos de radio `r`, y un corte perturbado de ejemplo con los nodos perturbados |
 | `<gen>_reference.png` | Curva de referencia ideal aislada (con nodos marcados en spline) |
 
@@ -192,7 +192,7 @@ Por cada ejecución se generan hasta **tres figuras** en `--out-dir` (por defect
 | `--seed` | todos | Semilla aleatoria | `0` |
 | `--max-background` | todos | Máx. trayectorias dibujadas en el fondo | `200` |
 | `--out-dir` | todos | Directorio de salida | `outputs/datasets` |
-| `--noise-std` | linear, curved, spline | Ruido gaussiano añadido al final | `0.02` / `0.0` |
+| `--noise-std` | linear, curved, spline | Ruido gaussiano. En spline es el jitter de instrumentación inyectado en los nodos de control (mantiene la curva suave); en linear/curved se añade en Y | `0.02` / `0.0` |
 | `--speed-variance` | linear, curved | Varianza en la velocidad | `0.01` |
 | `--curvature` | curved | Amplitud de la parábola | `0.1` |
 | `--radius` | spline | Radio del disco de perturbación por nodo | `0.05` |

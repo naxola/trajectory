@@ -14,16 +14,11 @@ sin imports hardcodeados en task.py.
 from typing import Callable
 from .base import SurgicalModel
 from .trajectory.mlp import TrajectoryMLP
-
-# Cada entrada es una función factory que devuelve una instancia configurada.
-# Usar callables (no clases directas) permite pasar kwargs específicos
-# por modelo sin que el caller los conozca.
+from .trajectory.rnn import TrajectoryRNN
 
 _REGISTRY: dict[str, Callable[..., SurgicalModel]] = {
     "mlp": lambda **kwargs: TrajectoryMLP(**kwargs),
-    # "rnn":         lambda **kwargs: TrajectoryRNN(**kwargs),
-    # "transformer": lambda **kwargs: TrajectoryTransformer(**kwargs),
-    # "force_mlp":   lambda **kwargs: ForceMLP(**kwargs),    # futuro
+    "rnn": lambda **kwargs: TrajectoryRNN(**kwargs),
 }
 
 

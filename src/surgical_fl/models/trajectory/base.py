@@ -47,3 +47,9 @@ class TrajectoryModel(SurgicalModel):
             Tensor de salida con forma (batch, T, output_dim)
         """
         ...
+
+    def predict_step(
+        self, x: torch.Tensor, hidden=None,
+    ) -> tuple[torch.Tensor, None]:
+        """Un paso autorregresivo. Modelos con estado (RNN) sobreescriben esto."""
+        return self.forward(x), None

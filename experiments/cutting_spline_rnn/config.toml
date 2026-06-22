@@ -1,0 +1,19 @@
+name = "cutting_spline_rnn"
+skill = "cutting"
+profiles = ["hospital_c", "hospital_d"]
+
+[model]
+name = "rnn"
+hidden_dim = 80
+dropout = 0.2
+
+[data]
+num_samples = 4000
+trajectory_length = 100
+val_split = 0.2
+
+[training]
+epochs = 30
+batch_size = 64
+learning_rate = 0.0005
+seed = 10

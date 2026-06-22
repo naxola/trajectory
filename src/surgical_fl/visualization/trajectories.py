@@ -51,9 +51,14 @@ def _autoregressive_rollout(
     """
     cur = torch.tensor(start_point, dtype=torch.float32).view(1, 1, -1).to(device)
     points = [np.asarray(start_point, dtype=np.float32)]
+    hidden = None
+    has_state = hasattr(model, "predict_step")
     with torch.no_grad():
         for _ in range(steps - 1):
-            cur = model(cur)
+            if has_state:
+                cur, hidden = model.predict_step(cur, hidden)
+            else:
+                cur = model(cur)
             points.append(cur.squeeze().cpu().numpy())
     return np.stack(points, axis=0)
 

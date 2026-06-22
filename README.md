@@ -10,15 +10,16 @@ El objetivo es estudiar si varios hospitales pueden entrenar conjuntamente un mo
 
 1. **Genera trayectorias sintéticas** que simulan maniobras quirúrgicas (actualmente: corte con bisturí). Cada hospital tiene un perfil propio —ruido, velocidad, curvatura, pericia— que modela la variabilidad real entre centros. Hay tres geometrías de corte: **recta**, **curva** y **spline alrededor de una curva de referencia** (ver más abajo).
 
-2. **Entrena un modelo** (MLP baseline) que aprende a predecir el siguiente punto de una trayectoria dado el punto actual, capturando así el estilo de ejecución de cada habilidad.
+2. **Entrena un modelo** (MLP baseline o RNN/GRU) que aprende a predecir el siguiente punto de una trayectoria dado el punto actual, capturando así el estilo de ejecución de cada habilidad.
 
 3. **Evalúa la calidad** de cada trayectoria con métricas de dominio: **desviación respecto a la incisión ideal**, suavidad, longitud y puntuación compuesta (0–1).
 
 4. **Visualiza** el aprendizaje y los datos: curva de loss, *rollout* autorregresivo del modelo frente a la trayectoria real, y el dataset de entrenamiento frente a su curva ideal.
 
-5. **Soporta dos modos de entrenamiento:**
+5. **Soporta tres modos de entrenamiento:**
    - **Centralizado** (`scripts/train_centralized.py`) — mezcla datos de todos los hospitales. Sirve como baseline para comparar contra el federado.
-   - **Federado** (via Flower) — cada hospital entrena localmente y solo comparte pesos del modelo, no datos. *(Pendiente: aún no implementado.)*
+   - **Federado** (via Flower) — cada hospital entrena localmente y solo comparte pesos del modelo, no datos. Usa `FlowerClient` (`NumPyClient`) y FedAvg como estrategia de agregación.
+   - **Comparación FL vs Centralizado** (`scripts/compare_fl_vs_centralized.py`) — entrena ambos modelos con los mismos datos iniciales y evalúa sobre los mismos conjuntos de validación para una comparación justa.
 
 ---
 
@@ -61,31 +62,51 @@ src/surgical_fl/
 │
 ├── models/
 │   ├── base.py              # SurgicalModel (nn.Module + serialización Flower)
-│   ├── registry.py          # get_model("mlp")
+│   ├── registry.py          # get_model("mlp"), get_model("rnn")
 │   └── trajectory/
 │       ├── base.py          # TrajectoryModel
-│       └── mlp.py           # TrajectoryMLP — baseline de 3 capas
+│       ├── mlp.py           # TrajectoryMLP — baseline de 3 capas
+│       └── rnn.py           # TrajectoryRNN — GRU con estado oculto
+│
+├── federation/
+│   ├── __init__.py
+│   ├── client.py            # FlowerClient (NumPyClient): fit/evaluate con Flower
+│   ├── client_app.py        # ClientApp para flwr run / run_simulation
+│   └── server_app.py        # ServerApp con FedAvg para flwr run / run_simulation
 │
 ├── training/
 │   └── trainer.py           # train_one_epoch(), evaluate(), train_local()
 │
 ├── visualization/
-│   └── trajectories.py      # curva de loss, rollout vs real, dataset vs ideal
+│   ├── trajectories.py      # curva de loss, rollout vs real, dataset vs ideal
+│   └── comparison.py        # barras RMSE, predicciones side-by-side, loss FL
 │
 └── utils/
-    ├── config.py            # ExperimentConfig (desde TOML o config.json del run)
+    ├── config.py            # ExperimentConfig + FederationConfig (desde TOML)
     ├── seeding.py           # Reproducibilidad
     └── run_io.py            # Persistencia de runs (config, métricas, checkpoints)
 
 scripts/
-├── train_centralized.py     # entrena un experimento y genera todas las figuras
-├── visualize.py             # regenera las figuras de un run SIN reentrenar
-└── visualize_dataset.py     # inspecciona un generador en crudo (sin entrenar)
+├── train_centralized.py          # entrena un experimento centralizado
+├── compare_fl_vs_centralized.py  # compara FL vs centralizado con mismos datos
+├── visualize.py                  # regenera figuras de un run SIN reentrenar
+└── visualize_dataset.py          # inspecciona un generador en crudo
 
-experiments/                 # un TOML por experimento (versionable)
-├── cutting_baseline/        # A + B (estilos distintos)
-├── cutting_spline/          # C vs D (mismo spline, distinta pericia)
-└── cutting_c/               # solo hospital C
+experiments/                      # un TOML por experimento (versionable)
+├── cutting_baseline/             # A + B (estilos distintos)
+├── cutting_spline/               # C vs D (mismo spline, distinta pericia)
+├── cutting_spline_rnn/           # C vs D con modelo RNN
+├── cutting_c/                    # solo hospital C
+└── federated_vs_centralized/     # comparación FL vs centralizado (C + D, RNN)
+
+tests/                            # pytest
+├── test_datasets.py
+├── test_factory.py
+├── test_federation.py            # FlowerClient, FedAvg, ronda FL, config
+├── test_generators.py
+├── test_models.py
+├── test_registries.py
+└── test_skills.py
 ```
 
 ---
@@ -110,13 +131,49 @@ Añadir un nuevo hospital o una nueva habilidad (sutura, disección) solo requie
 pip install -e .
 ```
 
+Esto instala `torch`, `numpy`, `matplotlib` y `flwr[simulation]`.
+
 ---
 
 ## Uso
 
 > En sistemas donde `python` no existe, usa `python3`. No hace falta `pip install -e .`: los scripts añaden `src/` al path.
 
-### Entrenar un experimento
+### Comparar Federado vs Centralizado (experimento principal)
+
+```bash
+python3 scripts/compare_fl_vs_centralized.py
+python3 scripts/compare_fl_vs_centralized.py --config experiments/federated_vs_centralized/config.toml
+```
+
+El script:
+1. **Entrena (o carga de caché)** un modelo centralizado con datos mezclados de los hospitales C y D.
+2. **Entrena un modelo federado** con Flower: cada hospital es un cliente FL que entrena localmente y comparte pesos via FedAvg.
+3. **Evalúa ambos** sobre los mismos conjuntos de validación por hospital.
+4. **Genera figuras comparativas** y guarda métricas.
+
+La comparación es justa:
+- **Mismos datos**: mismo split train/val derivado de la misma semilla.
+- **Misma inicialización**: ambos modelos parten de los mismos pesos aleatorios.
+- **Mismo cómputo total**: `epochs` centralizado = `num_rounds × local_epochs` federado.
+- **Misma evaluación**: RMSE sobre los mismos val sets por hospital.
+
+El modelo centralizado se **cachea** en `outputs/models/centralized/` y no se reentrena en ejecuciones posteriores (usa `--force-retrain` para forzarlo).
+
+Salida en `outputs/runs/<nombre>_comparison_<timestamp>/`:
+
+| Archivo | Qué contiene |
+|---|---|
+| `config.json` | Configuración exacta del experimento |
+| `metrics.json` | RMSE por hospital para ambos enfoques |
+| `checkpoints/centralized_best.pt` | Mejor modelo centralizado |
+| `checkpoints/federated_final.pt` | Modelo federado tras la última ronda |
+| `figures/comparison_rmse.png` | Barras RMSE: centralizado vs federado por hospital |
+| `figures/comparison_predictions.png` | Rollout autorregresivo side-by-side |
+| `figures/centralized_learning_curve.png` | Loss por epoch del centralizado |
+| `figures/fl_round_losses.png` | Loss global por ronda del federado |
+
+### Entrenar solo el modelo centralizado
 
 ```bash
 # Baseline A + B
@@ -124,6 +181,9 @@ python3 scripts/train_centralized.py --config experiments/cutting_baseline/confi
 
 # Comparar dos splines (experto vs intermedio, misma incisión ideal)
 python3 scripts/train_centralized.py --config experiments/cutting_spline/config.toml
+
+# RNN sobre splines
+python3 scripts/train_centralized.py --config experiments/cutting_spline_rnn/config.toml
 
 # Un solo hospital (C)
 python3 scripts/train_centralized.py --config experiments/cutting_c/config.toml
@@ -206,17 +266,19 @@ Dos perillas, en distintos sitios:
 - **Nodos del corte** (`n_nodes`) y **pericia** (`radius`) → en el perfil del hospital, `domain/profiles/hospitals.py`. Más `n_nodes` o más `radius` ⇒ mayor desviación respecto a la curva ideal.
 - **Forma de la incisión ideal** (`DEFAULT_REFERENCE_NODES`) → en `data/generators/trajectories/cutting.py`. Afecta a todos los hospitales spline (los mantiene comparables).
 
-### Configuración de experimentos
+---
+
+## Configuración de experimentos
 
 Cada experimento se define en un fichero TOML versionable:
 
 ```toml
-name     = "cutting_spline"
+name     = "federated_vs_centralized"
 skill    = "cutting"
-profiles = ["hospital_c", "hospital_d"]   # mismo spline, distinta pericia
+profiles = ["hospital_c", "hospital_d"]
 
 [model]
-name       = "mlp"
+name       = "rnn"
 hidden_dim = 80
 dropout    = 0.2
 
@@ -226,18 +288,83 @@ trajectory_length = 100
 val_split         = 0.2
 
 [training]
-epochs        = 30
+epochs        = 30          # epochs para el entrenamiento centralizado
 batch_size    = 64
 learning_rate = 0.0005
 seed          = 10
+
+[federation]
+num_rounds   = 10           # rondas de comunicación FL
+local_epochs = 3            # epochs locales por ronda (num_rounds × local_epochs = epochs)
 ```
 
 > La geometría del spline (`n_nodes`, `radius`) vive hoy en el perfil del hospital, no en el TOML.
 
-### Tests
+---
+
+## Tests
 
 ```bash
-pytest tests/ -v
+# Ejecutar todos los tests
+python3 -m pytest tests/ -v
+
+# Solo tests de federación
+python3 -m pytest tests/test_federation.py -v
+
+# Solo un test específico
+python3 -m pytest tests/test_federation.py::TestFederatedRound::test_one_round_reduces_loss -v
+```
+
+### Estructura de los tests
+
+| Fichero | Qué verifica |
+|---|---|
+| `test_datasets.py` | `TrajectoryDataset`: shapes, dtypes, desplazamiento input/target |
+| `test_factory.py` | Fábrica de generadores: combinaciones válidas, heterogeneidad entre hospitales |
+| `test_federation.py` | `FlowerClient` (fit/evaluate), FedAvg, ronda FL completa, `FederationConfig` |
+| `test_generators.py` | Linear/Curved/SplineCutGenerator: shapes, monotonía, reproducibilidad |
+| `test_models.py` | MLP/RNN: forward shapes, serialización Flower, registry |
+| `test_registries.py` | Registros de skills, profiles y generadores |
+| `test_skills.py` | `CuttingSkill`: métricas, score, validación de trayectorias |
+
+### Cómo escribir un test nuevo
+
+1. **Crear o editar** un fichero `tests/test_<modulo>.py`. Pytest los descubre automáticamente.
+2. **Importar** desde `surgical_fl.*` (el `conftest.py` ya añade `src/` al path).
+3. **Agrupar** tests relacionados en una clase `TestNombreDescriptivo`.
+4. **Usar fixtures** para datos compartidos (ver `@pytest.fixture(scope="module")` en `test_federation.py` para evitar regenerar datos en cada test).
+
+Ejemplo mínimo:
+
+```python
+"""Tests para mi_modulo."""
+import torch
+from surgical_fl.models.registry import get_model
+
+
+class TestMiModelo:
+
+    def test_forward_shape(self):
+        model = get_model("rnn", hidden_dim=16)
+        x = torch.randn(4, 10, 2)  # batch=4, T=10, dims=2
+        y = model(x)
+        assert y.shape == (4, 10, 2)
+
+    def test_loss_decreases_after_training(self):
+        """Verifica que el modelo aprende algo en unas pocas epochs."""
+        from surgical_fl.data.builders import build_dataset_for_profile
+        from surgical_fl.training.trainer import train_local, evaluate
+        from torch.utils.data import DataLoader
+
+        ds, _ = build_dataset_for_profile("cutting", "hospital_c", 40, 20, seed=0)
+        loader = DataLoader(ds, batch_size=16)
+
+        model = get_model("rnn", hidden_dim=16)
+        loss_before, _ = evaluate(model, loader, torch.device("cpu"))
+        model, _ = train_local(model, loader, epochs=5, learning_rate=0.001,
+                               device=torch.device("cpu"))
+        loss_after, _ = evaluate(model, loader, torch.device("cpu"))
+        assert loss_after < loss_before
 ```
 
 ---
@@ -253,7 +380,7 @@ pytest tests/ -v
 
 A y B usan estilos distintos (no comparables entre sí por desviación). **C y D comparten la misma incisión de referencia** y solo difieren en la pericia (`radius`): ese es el par diseñado para comparar de forma justa.
 
-La diferencia de perfiles hace que un futuro modelo federado deba generalizar entre estilos quirúrgicos distintos, replicando la heterogeneidad real entre centros. Cada hospital recibe además una **semilla derivada distinta**, de modo que sus datos son estadísticamente independientes.
+La diferencia de perfiles hace que el modelo federado deba generalizar entre estilos quirúrgicos distintos, replicando la heterogeneidad real entre centros. Cada hospital recibe además una **semilla derivada distinta**, de modo que sus datos son estadísticamente independientes.
 
 ---
 

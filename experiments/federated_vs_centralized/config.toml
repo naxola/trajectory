@@ -1,0 +1,26 @@
+name = "federated_vs_centralized"
+skill = "cutting"
+profiles = ["hospital_c", "hospital_d"]
+
+[model]
+name = "rnn"
+hidden_dim = 80
+dropout = 0.2
+
+[data]
+num_samples = 4000
+trajectory_length = 100
+val_split = 0.2
+
+# Entrenamiento centralizado: epochs totales sobre datos mezclados de C + D.
+[training]
+epochs = 30
+batch_size = 64
+learning_rate = 0.0005
+seed = 10
+
+# Federación: num_rounds × local_epochs = 30 epochs locales totales
+# para que la comparación sea justa en compute total.
+[federation]
+num_rounds = 10
+local_epochs = 3

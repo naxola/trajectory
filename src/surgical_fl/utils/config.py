@@ -59,6 +59,12 @@ class TrainingConfig:
 
 
 @dataclass
+class FederationConfig:
+    num_rounds: int = 10
+    local_epochs: int = 3
+
+
+@dataclass
 class ExperimentConfig:
     name: str = "default"
     skill: str = "cutting"
@@ -66,6 +72,7 @@ class ExperimentConfig:
     model: ModelConfig = field(default_factory=ModelConfig)
     data: DataConfig = field(default_factory=DataConfig)
     training: TrainingConfig = field(default_factory=TrainingConfig)
+    federation: FederationConfig = field(default_factory=FederationConfig)
 
     @classmethod
     def from_dict(cls, raw: dict, name_default: str = "default") -> "ExperimentConfig":
@@ -77,6 +84,7 @@ class ExperimentConfig:
             model=ModelConfig(**raw.get("model", {})),
             data=DataConfig(**raw.get("data", {})),
             training=TrainingConfig(**raw.get("training", {})),
+            federation=FederationConfig(**raw.get("federation", {})),
         )
 
     @classmethod
